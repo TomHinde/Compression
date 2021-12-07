@@ -10965,6 +10965,11 @@ extrn ADC_Setup, ADC_Read ; external ADC subroutines
 psect udata_acs ; reserve data space in access ram
 counter: ds 1 ; reserve one byte for a counter variable
 delay_count:ds 1 ; reserve one byte for counter in the delay routine
+input_h: ds 1
+input_l: ds 1
+sign_1: ds 1
+carry: ds 1
+
 
 psect udata_bank4 ; reserve data anywhere in RAM (here at 0x400)
 myArray: ds 0x80 ; reserve 128 bytes for message data
@@ -11016,8 +11021,26 @@ loop: tblrd*+ ; one byte from PM to TABLAT, increment TBLPRT
 measure_loop:
  call ADC_Read
  movf ADRESH, W, A
+
+
+
+ movff ADRESH, input_h
+ movff ADRESL, input_l
+
+ btfsc input_h, 7
+ call set_sign
+
+ movlw 0b00001111
+ andwf input_h
+
+ btfsc input_h, 3
+
+call compression
+
+
+ movf input_h, W, A
  call LCD_Write_Hex
- movf ADRESL, W, A
+ movf input_l, W, A
  call LCD_Write_Hex
  goto measure_loop ; goto current line in code
 
@@ -11026,4 +11049,40 @@ delay: decfsz delay_count, A ; decrement until zero
  bra delay
  return
 
- end rst
+set_sign:
+ movlw 0x01
+ movwf sign_1 ;sets sign variable to 1 if called
+ return
+
+compression:
+ movlw 0x00
+ movwf carry
+ movlw 0b00000111
+ andwf input_h
+ rrcf input_h
+ movff STATUS, carry
+ btfsc carry, 0
+ call carry_set
+ rrcf input_l
+; btfsc carry, 0
+; call set_las1
+
+ movlw 0b00001000
+ addwf input_h
+
+
+ return
+
+carry_set:
+ movlw 0x01
+ movwf carry
+ return
+
+;set_las1:
+; movlw 0b00000000
+; addwf input_l
+; return
+
+
+
+end rst

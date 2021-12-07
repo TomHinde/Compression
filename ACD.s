@@ -1,7 +1,7 @@
 #include <xc.inc>
 
 global  ADC_Setup, ADC_Read    
-    
+
 psect	adc_code, class=CODE
     
 ADC_Setup:
@@ -23,7 +23,5 @@ adc_loop:
 	btfsc   GO	    ; check to see if finished
 	bra	adc_loop
 	return
-
+	
 end
-
-
