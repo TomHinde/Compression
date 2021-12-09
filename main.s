@@ -62,22 +62,34 @@ loop: 	tblrd*+			; one byte from PM to TABLAT, increment TBLPRT
 	
 measure_loop:
 	call	ADC_Read
-	movf	ADRESH, W, A
+	movf	ADRESH, W, A	;moves contents of ADRESH into W (can probably delete)
 	
+	movff	ADRESH,	input_h ;moves ADRESH to input_h
+	movff	ADRESL, input_l	;moves ADRESL to input_l	
 	
+	;movlw	0b00001111
+	;movwf	input_h
+	;movlw	0b00111001
+	;movwf	input_l
 	
-	movff	ADRESH,	input_h
-	movff	ADRESL, input_l
+	movlw	0x00
+	movwf	sign_1		;sets sign to 0 by default
 	
-	btfsc	input_h, 7
-	call	set_sign
+	btfsc	input_h, 7	;checks sign of input_h
+	call	set_sign	;calls sign function if negative
 	
-	movlw	0b00001111
-	andwf	input_h
+	movlw	0b00001111	
+	andwf	input_h		;sets sign bits to 0
 	
-	btfsc	input_h, 3
-		
-call	compression
+	btfsc	input_h, 3	;calls compression if voltage is above 50% of max input
+	call	compression
+	
+	rrcf	input_h
+	rrcf	input_l
+	btfss	sign_1, 0
+	call	add_offset
+	btfsc	sign_1, 0
+	call	sub_offset
 	
 	
 	movf	input_h, W, A	
@@ -98,16 +110,16 @@ set_sign:
 	
 compression:
 	movlw	0x00
-	movwf	carry
+	movwf	carry		;sets carry bit to 0 by default
 	movlw	0b00000111
-	andwf	input_h
-	rrcf	input_h
-	movff	STATUS, carry
-	btfsc	carry, 0
+	andwf	input_h		;subtract threshold voltage
+	rrcf	input_h		;division by 2 (shifted right)
+	movff	STATUS, carry	;moves status register into 'carry'
+	btfsc	carry, 0	;checks if carry bit is 1
 	call	carry_set
 	rrcf	input_l
-;	btfsc	carry, 0
-;	call	set_las1
+	btfsc	carry, 0
+	call	set_las1
 	
 	movlw	0b00001000
 	addwf	input_h
@@ -117,15 +129,25 @@ compression:
 
 carry_set:
 	movlw	0x01
-	movwf	carry
+	movwf	carry		;sets carry to 1
 	return
 
-;set_las1:
-;	movlw	0b00000000
-;	addwf	input_l
-;	return
+set_las1:
+	movlw	0b00000000
+	addwf	input_l
+	return
 	
-
+add_offset:
+	movlw	0b00001000
+	addwf	input_h
+	return
+	
+sub_offset:
+	comf	input_l
+	comf	input_h
+	movlw	0b00000111
+	andwf	input_h
+	return
 
 end	rst
 	
