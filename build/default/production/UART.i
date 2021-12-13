@@ -10958,37 +10958,31 @@ ENDM
 # 5 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\xc.inc" 2 3
 # 2 "UART.s" 2
 
-global UART_Setup, UART_Transmit_Message
+;global UART_Setup, UART_Transmit_Message
+global SPI_MasterInit, SPI_MasterTransmit, Wait_Transmit
 
 psect udata_acs ; reserve data space in access ram
 UART_counter: ds 1 ; reserve 1 byte for variable UART_counter
 
 psect uart_code,class=CODE
-UART_Setup:
-    bsf ((RCSTA1) and 0FFh), 7, a ; enable
-    bcf ((TXSTA1) and 0FFh), 4, a ; synchronous
-    bcf ((TXSTA1) and 0FFh), 2, a ; slow speed
-    bsf ((TXSTA1) and 0FFh), 5, a ; enable transmit
-    bcf ((BAUDCON1) and 0FFh), 3, a ; 8-bit generator only
-    movlw 103 ; gives 9600 Baud rate (actually 9615)
-    movwf SPBRG1, A ; set baud rate
-    bsf TRISC, PORTC_TX1_POSN, A ; ((PORTC) and 0FFh), 6, a pin is output on ((PORTC) and 0FFh), 6, a pin
-     ; must set ((TRISC) and 0FFh), 6, a to 1
+
+SPI_MasterInit: ; Set Clock edge to negative
+    bcf ((SSP2STAT) and 0FFh), 6, a ; ((SSP1STAT) and 0FFh), 6, a bit in SSP2STAT,
+    ; MSSP enable; ((SSP1CON1) and 0FFh), 4, a=1; SPI master, clock=Fosc/64 (1MHz)
+    movlw (SSP2CON1_SSPEN_MASK)|(SSP2CON1_CKP_MASK)|(SSP2CON1_SSPM1_MASK)
+    movwf SSP2CON1, A
+    ; ((PORTD) and 0FFh), 4, a output; ((PORTD) and 0FFh), 6, a output
+    bcf TRISD, PORTD_SDO2_POSN, A ; ((PORTD) and 0FFh), 4, a output
+    bcf TRISD, PORTD_SCK2_POSN, A ; ((PORTD) and 0FFh), 6, a output
     return
 
-UART_Transmit_Message: ; Message stored at FSR2, length stored in W
-    movwf UART_counter, A
-UART_Loop_message:
-    movf POSTINC2, W, A
-    call UART_Transmit_Byte
-    decfsz UART_counter, A
-    bra UART_Loop_message
+SPI_MasterTransmit: ; Start transmission of data (held in W)
+    movwf SSP2BUF, A ; write data to output buffer
+Wait_Transmit: ; Wait for transmission to complete
+    btfss ((PIR2) and 0FFh), 5, a ; check interrupt flag to see if data has been sent
+    bra Wait_Transmit
+    bcf ((PIR2) and 0FFh), 5, a ; clear interrupt flag return
     return
 
-UART_Transmit_Byte: ; Transmits byte stored in W
-    btfss ((PIR1) and 0FFh), 4, a ; ((PIR1) and 0FFh), 4, a is set when TXREG1 is empty
-    bra UART_Transmit_Byte
-    movwf TXREG1, A
-    return
 
 end

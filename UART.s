@@ -1,6 +1,7 @@
 #include <xc.inc>
     
 ;global  UART_Setup, UART_Transmit_Message
+global	SPI_MasterInit, SPI_MasterTransmit, Wait_Transmit
 
 psect	udata_acs   ; reserve data space in access ram
 UART_counter: ds    1	    ; reserve 1 byte for variable UART_counter
@@ -23,6 +24,8 @@ Wait_Transmit:	; Wait for transmission to complete
     btfss 	SSP2IF		; check interrupt flag to see if data has been sent
     bra 	Wait_Transmit
     bcf 	SSP2IF		; clear interrupt flag	return
+    return
+
 
 end
 

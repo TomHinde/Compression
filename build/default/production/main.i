@@ -10958,9 +10958,10 @@ ENDM
 # 5 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\xc.inc" 2 3
 # 2 "main.s" 2
 
-extrn UART_Setup, UART_Transmit_Message ; external uart subroutines
+;extrn UART_Setup, UART_Transmit_Message ; external uart subroutines
 extrn LCD_Setup, LCD_Write_Message, LCD_Write_Hex ; external LCD subroutines
 extrn ADC_Setup, ADC_Read ; external ADC subroutines
+extrn SPI_MasterInit, SPI_MasterTransmit
 
 psect udata_acs ; reserve data space in access ram
 counter: ds 1 ; reserve one byte for a counter variable
@@ -10989,9 +10990,12 @@ rst: org 0x0
  ; ******* Programme FLASH read Setup Code ***********************
 setup: bcf ((EECON1) and 0FFh), 6, a ; point to Flash program memory
  bsf ((EECON1) and 0FFh), 7, a ; access Flash program memory
- call UART_Setup ; setup UART
+ ;call UART_Setup ; setup UART
  call LCD_Setup ; setup UART
  call ADC_Setup ; setup ADC
+ call SPI_MasterInit
+ bcf ((TRISD) and 0FFh), 0, a
+ bcf ((TRISD) and 0FFh), 2, a
  goto start
 
  ; ******* Main programme ****************************************
@@ -11004,45 +11008,66 @@ start: lfsr 0, myArray ; Load FSR0 with address in RAM
  movwf TBLPTRL, A ; load low byte to TBLPTRL
  movlw myTable_l ; bytes to read
  movwf counter, A ; our counter register
-loop: tblrd*+ ; one byte from PM to TABLAT, increment TBLPRT
- movff TABLAT, POSTINC0; move data from TABLAT to (FSR0), inc FSR0
- decfsz counter, A ; count down to zero
- bra loop ; keep going until finished
 
- movlw myTable_l ; output message to UART
- lfsr 2, myArray
- call UART_Transmit_Message
-
- movlw myTable_l-1 ; output message to LCD
-    ; don't send the final carriage return to LCD
- lfsr 2, myArray
- call LCD_Write_Message
 
 measure_loop:
  call ADC_Read
- movf ADRESH, W, A
+ movf ADRESH, W, A ;moves contents of ADRESH into W (can probably delete)
 
+ movff ADRESH, input_h ;moves ADRESH to input_h
+ movff ADRESL, input_l ;moves ADRESL to input_l
 
+ ;movlw 0b00001111
+ ;movwf input_h
+ ;movlw 0b00111001
+ ;movwf input_l
 
- movff ADRESH, input_h
- movff ADRESL, input_l
+ movlw 0x00
+ movwf sign_1 ;sets sign to 0 by default
 
- btfsc input_h, 7
- call set_sign
+ btfsc input_h, 7 ;checks sign of input_h
+ call set_sign ;calls sign function if negative
 
  movlw 0b00001111
- andwf input_h
+ andwf input_h ;sets sign bits to 0
 
- btfsc input_h, 3
+ btfsc input_h, 3 ;calls compression if voltage is above 50% of max input
+ call compression
 
-call compression
+ rrcf input_h
+ rrcf input_l
+ btfss sign_1, 0
+ call add_offset
+ btfsc sign_1, 0
+ call sub_offset
 
 
  movf input_h, W, A
  call LCD_Write_Hex
  movf input_l, W, A
  call LCD_Write_Hex
+
+ movlw 0b00010000
+ iorwf input_h
+
+ bsf ((LATD) and 0FFh), 2, a
+ bcf ((LATD) and 0FFh), 2, a
+ movf input_h, W, A
+ call SPI_MasterTransmit
+ movf input_l, W, A
+ call SPI_MasterTransmit
+ bsf ((LATD) and 0FFh), 2, a
+
+ bsf ((LATD) and 0FFh), 0, a
+ bcf ((LATD) and 0FFh), 0, a
+ nop
+ nop
+ nop
+ nop
+ nop
+ bsf ((LATD) and 0FFh), 0, a
  goto measure_loop ; goto current line in code
+
 
  ; a delay subroutine if you need one, times around loop in delay_count
 delay: decfsz delay_count, A ; decrement until zero
@@ -11056,16 +11081,16 @@ set_sign:
 
 compression:
  movlw 0x00
- movwf carry
+ movwf carry ;sets carry bit to 0 by default
  movlw 0b00000111
- andwf input_h
- rrcf input_h
- movff STATUS, carry
- btfsc carry, 0
+ andwf input_h ;subtract threshold voltage
+ rrcf input_h ;division by 2 (shifted right)
+ movff STATUS, carry ;moves status register into 'carry'
+ btfsc carry, 0 ;checks if carry bit is 1
  call carry_set
  rrcf input_l
-; btfsc carry, 0
-; call set_las1
+ btfsc carry, 0
+ call set_las1
 
  movlw 0b00001000
  addwf input_h
@@ -11075,14 +11100,24 @@ compression:
 
 carry_set:
  movlw 0x01
- movwf carry
+ movwf carry ;sets carry to 1
  return
 
-;set_las1:
-; movlw 0b00000000
-; addwf input_l
-; return
+set_las1:
+ movlw 0b00000000
+ addwf input_l
+ return
 
+add_offset:
+ movlw 0b00001000
+ addwf input_h
+ return
 
+sub_offset:
+ comf input_l
+ comf input_h
+ movlw 0b00000111
+ andwf input_h
+ return
 
 end rst

@@ -1,8 +1,9 @@
 #include <xc.inc>
 
-extrn	UART_Setup, UART_Transmit_Message  ; external uart subroutines
+;extrn	UART_Setup, UART_Transmit_Message  ; external uart subroutines
 extrn	LCD_Setup, LCD_Write_Message, LCD_Write_Hex ; external LCD subroutines
 extrn	ADC_Setup, ADC_Read		   ; external ADC subroutines
+extrn	SPI_MasterInit, SPI_MasterTransmit
 	
 psect	udata_acs   ; reserve data space in access ram
 counter:    ds 1    ; reserve one byte for a counter variable
@@ -31,9 +32,12 @@ rst: 	org 0x0
 	; ******* Programme FLASH read Setup Code ***********************
 setup:	bcf	CFGS	; point to Flash program memory  
 	bsf	EEPGD 	; access Flash program memory
-	call	UART_Setup	; setup UART
+	;call	UART_Setup	; setup UART
 	call	LCD_Setup	; setup UART
 	call	ADC_Setup	; setup ADC
+	call	SPI_MasterInit
+	bcf	TRISD0
+	bcf	TRISD2
 	goto	start
 	
 	; ******* Main programme ****************************************
@@ -45,20 +49,8 @@ start: 	lfsr	0, myArray	; Load FSR0 with address in RAM
 	movlw	low(myTable)	; address of data in PM
 	movwf	TBLPTRL, A		; load low byte to TBLPTRL
 	movlw	myTable_l	; bytes to read
-	movwf 	counter, A		; our counter register
-loop: 	tblrd*+			; one byte from PM to TABLAT, increment TBLPRT
-	movff	TABLAT, POSTINC0; move data from TABLAT to (FSR0), inc FSR0	
-	decfsz	counter, A		; count down to zero
-	bra	loop		; keep going until finished
-		
-	movlw	myTable_l	; output message to UART
-	lfsr	2, myArray
-	call	UART_Transmit_Message
+	movwf 	counter, A	; our counter register
 
-	movlw	myTable_l-1	; output message to LCD
-				; don't send the final carriage return to LCD
-	lfsr	2, myArray
-	call	LCD_Write_Message
 	
 measure_loop:
 	call	ADC_Read
@@ -96,7 +88,28 @@ measure_loop:
 	call	LCD_Write_Hex
 	movf	input_l, W, A
 	call	LCD_Write_Hex
+	
+	movlw	0b00010000
+	iorwf	input_h
+	
+	bsf	LATD2
+	bcf	LATD2
+	movf	input_h, W, A
+	call	SPI_MasterTransmit
+	movf	input_l, W, A
+	call	SPI_MasterTransmit
+	bsf	LATD2
+	
+	bsf	LATD0
+	bcf	LATD0
+	nop
+	nop
+	nop
+	nop
+	nop
+	bsf	LATD0
 	goto	measure_loop		; goto current line in code
+	
 	
 	; a delay subroutine if you need one, times around loop in delay_count
 delay:	decfsz	delay_count, A	; decrement until zero
