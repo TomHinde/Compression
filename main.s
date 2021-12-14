@@ -87,10 +87,10 @@ measure_loop:
 	call	sub_offset
 	
 	
-	movf	input_h, W, A	
-	call	LCD_Write_Hex
-	movf	input_l, W, A
-	call	LCD_Write_Hex
+	;movf	input_h, W, A	
+	;call	LCD_Write_Hex
+	;movf	input_l, W, A
+	;call	LCD_Write_Hex
 	
 	movlw	0b00010000
 	iorwf	input_h
