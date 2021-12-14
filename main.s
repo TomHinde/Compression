@@ -73,6 +73,9 @@ measure_loop:
 	movlw	0b00001111	
 	andwf	input_h		;sets sign bits to 0
 	
+	btfsc	sign_1, 0
+	call	invert_sign
+	
 	btfsc	input_h, 3	;calls compression if voltage is above 50% of max input
 	call	compression
 	
@@ -119,6 +122,11 @@ delay:	decfsz	delay_count, A	; decrement until zero
 set_sign:
 	movlw	0x01
 	movwf	sign_1	;sets sign variable to 1 if called
+	return
+	
+invert_sign:
+	comf	input_h
+	comf	input_l
 	return
 	
 compression:
