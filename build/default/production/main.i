@@ -1,21 +1,21 @@
 # 1 "main.s"
 # 1 "<built-in>" 1
 # 1 "main.s" 2
-# 1 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\xc.inc" 1 3
+# 1 "/Applications/microchip/xc8/v2.32/pic/include/xc.inc" 1 3
 
 
 
 
-# 1 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\pic18.inc" 1 3
+# 1 "/Applications/microchip/xc8/v2.32/pic/include/pic18.inc" 1 3
 
 
 
 
 
-# 1 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\pic18_chip_select.inc" 1 3
-# 1550 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\pic18_chip_select.inc" 3
-# 1 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\proc\\pic18f87k22.inc" 1 3
-# 48 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\proc\\pic18f87k22.inc" 3
+# 1 "/Applications/microchip/xc8/v2.32/pic/include/pic18_chip_select.inc" 1 3
+# 1550 "/Applications/microchip/xc8/v2.32/pic/include/pic18_chip_select.inc" 3
+# 1 "/Applications/microchip/xc8/v2.32/pic/include/proc/pic18f87k22.inc" 1 3
+# 48 "/Applications/microchip/xc8/v2.32/pic/include/proc/pic18f87k22.inc" 3
 PMD3 equ 0F16h
 
 PMD3_TMR12MD_POSN equ 0000h
@@ -10866,7 +10866,7 @@ TOSH_TOSH_MASK equ 00FFh
 
 
 TOSU equ 0FFFh
-# 12494 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\proc\\pic18f87k22.inc" 3
+# 12494 "/Applications/microchip/xc8/v2.32/pic/include/proc/pic18f87k22.inc" 3
 psect udata_acs,class=COMRAM,space=1,noexec,lowdata
 
 psect udata_bank0,class=BANK0,space=1,noexec,lowdata
@@ -10889,9 +10889,8 @@ psect udata,class=RAM,space=1,noexec
 psect code,class=CODE,space=0,reloc=2
 psect data,class=CONST,space=0,reloc=2,noexec
 psect edata,class=EEDATA,space=3,delta=2,noexec
-# 1550 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\pic18_chip_select.inc" 2 3
-# 6 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\pic18.inc" 2 3
-
+# 1551 "/Applications/microchip/xc8/v2.32/pic/include/pic18_chip_select.inc" 2 3
+# 7 "/Applications/microchip/xc8/v2.32/pic/include/pic18.inc" 2 3
 
 
 
@@ -10955,7 +10954,7 @@ addwfc FSR1H,c
 stk_offset SET 0
 auto_size SET 0
 ENDM
-# 5 "C:\\Program Files\\Microchip\\xc8\\v2.32\\pic\\include\\xc.inc" 2 3
+# 6 "/Applications/microchip/xc8/v2.32/pic/include/xc.inc" 2 3
 # 2 "main.s" 2
 
 ;extrn UART_Setup, UART_Transmit_Message ; external uart subroutines
@@ -10966,22 +10965,22 @@ extrn SPI_MasterInit, SPI_MasterTransmit
 psect udata_acs ; reserve data space in access ram
 counter: ds 1 ; reserve one byte for a counter variable
 delay_count:ds 1 ; reserve one byte for counter in the delay routine
-input_h: ds 1
-input_l: ds 1
-sign_1: ds 1
-carry: ds 1
+input_h: ds 1 ; first 8 bits of input
+input_l: ds 1 ; second 8 bits of input
+sign_1: ds 1 ; stores sign (+ve or -ve)
+carry: ds 1 ; stores carry bit
 
 
-psect udata_bank4 ; reserve data anywhere in RAM (here at 0x400)
-myArray: ds 0x80 ; reserve 128 bytes for message data
+;psect udata_bank4 ; reserve data anywhere in RAM (here at 0x400)
+;myArray: ds 0x80 ; reserve 128 bytes for message data
 
-psect data
+;psect data
  ; ******* myTable, data in programme memory, and its length *****
-myTable:
- db 'H','e','l','l','o',' ','W','o','r','l','d','!',0x0a
-     ; message, plus carriage return
- myTable_l EQU 13 ; length of data
- align 2
+;myTable:
+; db 'H','e','l','l','o',' ','W','o','r','l','d','!',0x0a
+; ; message, plus carriage return
+; myTable_l EQU 13 ; length of data
+; align 2
 
 psect code, abs
 rst: org 0x0
@@ -10991,61 +10990,56 @@ rst: org 0x0
 setup: bcf ((EECON1) and 0FFh), 6, a ; point to Flash program memory
  bsf ((EECON1) and 0FFh), 7, a ; access Flash program memory
  ;call UART_Setup ; setup UART
- call LCD_Setup ; setup UART
+ call LCD_Setup ; setup LDC (for testing only)
  call ADC_Setup ; setup ADC
- call SPI_MasterInit
- bcf ((TRISD) and 0FFh), 0, a
- bcf ((TRISD) and 0FFh), 2, a
- goto start
+ call SPI_MasterInit ; calls SPI Initialisation function
+ bcf ((TRISD) and 0FFh), 0, a ; initialise LDAC pin as output
+ bcf ((TRISD) and 0FFh), 2, a ; initialise ((PORTE) and 0FFh), 2, a pin as output
+ bcf ((TRISD) and 0FFh), 7, a ; initialise VDD pin as output
+ bsf PORTD, 7 ; set VDD to 5V always
+ goto measure_loop
 
  ; ******* Main programme ****************************************
-start: lfsr 0, myArray ; Load FSR0 with address in RAM
- movlw low highword(myTable) ; address of data in PM
- movwf TBLPTRU, A ; load upper bits to TBLPTRU
- movlw high(myTable) ; address of data in PM
- movwf TBLPTRH, A ; load high byte to TBLPTRH
- movlw low(myTable) ; address of data in PM
- movwf TBLPTRL, A ; load low byte to TBLPTRL
- movlw myTable_l ; bytes to read
- movwf counter, A ; our counter register
-
 
 measure_loop:
- call ADC_Read
- movf ADRESH, W, A ;moves contents of ADRESH into W (can probably delete)
+ call ADC_Read ;calls ADC_Read function
 
  movff ADRESH, input_h ;moves ADRESH to input_h
  movff ADRESL, input_l ;moves ADRESL to input_l
 
- ;movlw 0b00001111
- ;movwf input_h
+ ;movlw 0b00001111 ;these four lines were used to test various input
+ ;movwf input_h ;voltages instead of using an actual ADC input
  ;movlw 0b00111001
  ;movwf input_l
 
  movlw 0x00
- movwf sign_1 ;sets sign to 0 by default
+ movwf sign_1 ;sets sign variable to 0 by default
 
  btfsc input_h, 7 ;checks sign of input_h
  call set_sign ;calls sign function if negative
 
  movlw 0b00001111
- andwf input_h ;sets sign bits to 0
+ andwf input_h ;sets sign bits to 0 to allow correct maths ops
 
- btfsc input_h, 3 ;calls compression if voltage is above 50% of max input
- call compression
+ btfsc sign_1, 0 ;if -ve, inverts input (2s complement)
+ call invert_sign ;incorrect by 1 but this is lost in division by 2
+    ;for offset
 
- rrcf input_h
- rrcf input_l
- btfss sign_1, 0
+ btfsc input_h, 3 ;calls compression if voltage is above 50% of max input,
+ call compression ;this is the threshold voltage
+
+ rrcf input_h ;division by 2
+ rrcf input_l ;division by 2
+ btfss sign_1, 0 ;adds/subtracts offset as required.
  call add_offset
  btfsc sign_1, 0
  call sub_offset
 
 
- movf input_h, W, A
- call LCD_Write_Hex
- movf input_l, W, A
- call LCD_Write_Hex
+ ;movf input_h, W, A ;these four lines of code show the output as a hex
+ ;call LCD_Write_Hex ;number on the ADC
+ ;movf input_l, W, A
+ ;call LCD_Write_Hex
 
  movlw 0b00010000
  iorwf input_h
@@ -11077,6 +11071,11 @@ delay: decfsz delay_count, A ; decrement until zero
 set_sign:
  movlw 0x01
  movwf sign_1 ;sets sign variable to 1 if called
+ return
+
+invert_sign:
+ comf input_h
+ comf input_l
  return
 
 compression:
