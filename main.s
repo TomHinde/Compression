@@ -8,7 +8,7 @@ psect	udata_acs   ; reserve data space in access ram
 input_h:    ds 1    ; first 8 bits of input
 input_l:    ds 1    ; second 8 bits of input
 sign:	    ds 1    ; stores sign (+ve or -ve)
-carry:	    ds 1    ; stores carry bit
+
    
 psect	code, abs	
 rst: 	org 0x0
@@ -17,7 +17,6 @@ rst: 	org 0x0
 	; ******* Programme FLASH read Setup Code ***********************
 setup:	bcf	CFGS	; point to Flash program memory  
 	bsf	EEPGD 	; access Flash program memory
-	;call	UART_Setup	; setup UART
 	call	LCD_Setup	; setup LDC (for testing only)
 	call	ADC_Setup	; setup ADC
 	call	SPI_MasterInit  ; calls SPI Initialisation function
@@ -65,29 +64,25 @@ measure_loop:
 	;movf	input_l, W, A
 	;call	LCD_Write_Hex
 	
-	movlw	0b00010000
-	iorwf	input_h
+	bcf	input_h, 4	;activates DAC
 	
-	bsf	LATD2
-	bcf	LATD2
-	movf	input_h, W, A
+	bsf	LATD2		;ensures CS starts raised
+	bcf	LATD2		;lowers CS to initialise write command
+	movf	input_h, W, A		;sends both bits to DAC
 	call	SPI_MasterTransmit
 	movf	input_l, W, A
 	call	SPI_MasterTransmit
-	bsf	LATD2
+	bsf	LATD2		;sets CS to 1 (turns CS off)
 	
-	bsf	LATD0
-	bcf	LATD0
+	bsf	LATD0		;makes sure LATD starts on
+	bcf	LATD0		;sets to 0 to start latching
+	nop			;delay to ensure chip has time to log LATD as 0
 	nop
 	nop
 	nop
 	nop
-	nop
-	bsf	LATD0
+	bsf	LATD0		;sets LATD high again
 	goto	measure_loop		; goto current line in code
-	
-	
-
 	
 set_sign:
 	movlw	0x01
@@ -95,56 +90,28 @@ set_sign:
 	return
 	
 invert_sign:
-	comf	input_h
+	comf	input_h	;inverts if negative
 	comf	input_l
 	return
 	
 compression:
-	bcf	carry, 0	;sets carry bit to 0 by default
+	bcf	STATUS, 0	;clear carry bit
 	bcf	input_h, 3	;subtract threshold voltage
 	rrcf	input_h		;division by 2 (shifted right)
-	
-	movf	input_l, W
-	
-	movff	STATUS, carry	;moves status register into 'carry'
-	btfsc	carry, 0	;checks if carry bit is 1
-	call	carry_set
 	rrcf	input_l
-	
-	movf	input_l, W
-	
-	btfsc	carry, 0
-	call	set_las1
-	
-	movlw	0b00001000
-	addwf	input_h
-
-
+	bcf	STATUS, 0	;clear carry bit
+	bsf	input_h, 3	;add carry bit
 	return
 
-carry_set:
-	movlw	0x01
-	movwf	carry		;sets carry to 1
-	return
-
-set_las1:
-	movlw	0b10000000
-	addwf	input_l
-	
-	movf	input_l, W
-	
-	return
-	
 add_offset:
-	movlw	0b00001000
-	addwf	input_h
+	bsf	input_h, 3	;adds 2.048 (offset)
 	return
 	
 sub_offset:
-	comf	input_l
-	comf	input_h
-	movlw	0b00000111
-	andwf	input_h
+	comf	input_l		;takes complement of both (effectively subtracting
+	comf	input_h		;from 2.048 offset)
+	movlw	0b00000111	;sets first five bits to 0 (this is fine as the value 
+	andwf	input_h		;must be lower than 2.048 V anyway). 
 	return
-
+	
 end	rst
