@@ -1,29 +1,14 @@
 #include <xc.inc>
 
-;extrn	UART_Setup, UART_Transmit_Message  ; external uart subroutines
 extrn	LCD_Setup, LCD_Write_Message, LCD_Write_Hex ; external LCD subroutines
 extrn	ADC_Setup, ADC_Read		   ; external ADC subroutines
 extrn	SPI_MasterInit, SPI_MasterTransmit
 	
 psect	udata_acs   ; reserve data space in access ram
-counter:    ds 1    ; reserve one byte for a counter variable
-delay_count:ds 1    ; reserve one byte for counter in the delay routine
 input_h:    ds 1    ; first 8 bits of input
 input_l:    ds 1    ; second 8 bits of input
-sign_1:	    ds 1    ; stores sign (+ve or -ve)
+sign:	    ds 1    ; stores sign (+ve or -ve)
 carry:	    ds 1    ; stores carry bit
-
-    
-;psect	udata_bank4 ; reserve data anywhere in RAM (here at 0x400)
-;myArray:    ds 0x80 ; reserve 128 bytes for message data
-
-;psect	data    
-	; ******* myTable, data in programme memory, and its length *****
-;myTable:
-;	db	'H','e','l','l','o',' ','W','o','r','l','d','!',0x0a
-;					; message, plus carriage return
-;	myTable_l   EQU	13	; length of data
-;	align	2
    
 psect	code, abs	
 rst: 	org 0x0
@@ -50,37 +35,33 @@ measure_loop:
 	movff	ADRESH,	input_h ;moves ADRESH to input_h
 	movff	ADRESL, input_l	;moves ADRESL to input_l	
 	
-	;movlw	0b00001111	;these four lines were used to test various input
-	;movwf	input_h		;voltages instead of using an actual ADC input
-	;movlw	0b00111001
-	;movwf	input_l
-	
-	movlw	0x00
-	movwf	sign_1		;sets sign variable to 0 by default
+	movlw	0b11110100	;these four lines were used to test various input
+	movwf	input_h		;voltages instead of using an actual ADC input
+	movlw	0b00111001
+	movwf	input_l
+
+	bcf	sign, 0		;sets sign variable to 0 by default
 	
 	btfsc	input_h, 7	;checks sign of input_h
-	call	set_sign	;calls sign function if negative
+	bsf	sign, 0		;sets sign as 1 if negative
 	
-	movlw	0b00001111	
-	andwf	input_h		;sets sign bits to 0 to allow correct maths ops
-	
-	btfsc	sign_1, 0	;if -ve, inverts input (2s complement)
+	btfsc	sign, 0		;if -ve, inverts input (2s complement)
 	call	invert_sign	;incorrect by 1 but this is lost in division by 2
 				;for offset
-	
+				
 	btfsc	input_h, 3	;calls compression if voltage is above 50% of max input,
 	call	compression	;this is the threshold voltage
 	
 	rrcf	input_h		;division by 2
 	rrcf	input_l		;division by 2
-	btfss	sign_1, 0	;adds/subtracts offset as required.
+	btfss	sign, 0		;adds/subtracts offset as required.
 	call	add_offset
-	btfsc	sign_1, 0
+	btfsc	sign, 0
 	call	sub_offset
 	
 	
 	;movf	input_h, W, A	;these four lines of code show the output as a hex
-	;call	LCD_Write_Hex	;number on the ADC 
+	;call	LCD_Write_Hex	;number on the LCD 
 	;movf	input_l, W, A
 	;call	LCD_Write_Hex
 	
@@ -106,14 +87,11 @@ measure_loop:
 	goto	measure_loop		; goto current line in code
 	
 	
-	; a delay subroutine if you need one, times around loop in delay_count
-delay:	decfsz	delay_count, A	; decrement until zero
-	bra	delay
-	return
+
 	
 set_sign:
 	movlw	0x01
-	movwf	sign_1	;sets sign variable to 1 if called
+	movwf	sign	;sets sign variable to 1 if called
 	return
 	
 invert_sign:
@@ -122,15 +100,19 @@ invert_sign:
 	return
 	
 compression:
-	movlw	0x00
-	movwf	carry		;sets carry bit to 0 by default
-	movlw	0b00000111
-	andwf	input_h		;subtract threshold voltage
+	bcf	carry, 0	;sets carry bit to 0 by default
+	bcf	input_h, 3	;subtract threshold voltage
 	rrcf	input_h		;division by 2 (shifted right)
+	
+	movf	input_l, W
+	
 	movff	STATUS, carry	;moves status register into 'carry'
 	btfsc	carry, 0	;checks if carry bit is 1
 	call	carry_set
 	rrcf	input_l
+	
+	movf	input_l, W
+	
 	btfsc	carry, 0
 	call	set_las1
 	
@@ -146,8 +128,11 @@ carry_set:
 	return
 
 set_las1:
-	movlw	0b00000000
+	movlw	0b10000000
 	addwf	input_l
+	
+	movf	input_l, W
+	
 	return
 	
 add_offset:
